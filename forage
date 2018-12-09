@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+
+# !/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+
+# Forage
+# ======
+# Copyright (C) 2018 riot <riot@c-base.org> and others.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""
+
+Forage Tool
+===========
+
+A simple tool to execute commands on given folders.
+Via spur, forage is capable of doing that over ssh, too.
+
+"""
+
+__author__ = "Heiko 'riot' Weinen"
+__license__ = "AGPLv3"
+
+import os
+import spur
+import click
+import sys
+
+
+def log(*what):
+    """Very simple logging"""
+
+    result = ""
+    for item in what:
+        result += str(item) + " "
+
+    print(result.rstrip(" "))
+
+
+def run_process(cwd, args, shell=None):
+    """Execute an external process via Spur"""
+
+    log("Running:", cwd, args)
+
+    if shell is None:
+        log('Running on local shell')
+        shell = spur.LocalShell()
+    else:
+        log('Running on remote shell:', shell)
+
+    try:
+        process = shell.run(args, cwd=cwd)
+
+        return True, process
+    except spur.RunProcessError as e:
+        log('Uh oh, the teapot broke again! Error:', e, type(e))
+        log(e.args, e.return_code, e.output)
+        return False, e
+    except spur.NoSuchCommandError as e:
+        log('Command was not found:', e, type(e))
+        log(args)
+        return False, e
+
+
+@click.command()
+@click.option('--stop', '-s', is_flag=True, default=False, help='Stop immediately upon return code != 0')
+@click.option('--confirm', '-c', is_flag=True, default=False, help='Confirm call for each element')
+@click.option('--dry', '-d', is_flag=True, default=False, help='Do a dry run')
+@click.option('--change-dir', default=None, help='Change to another directory before execution')
+@click.argument('command')
+@click.argument('elements', nargs=-1)
+def foreach(stop, confirm, dry, change_dir, command, elements):
+    """Execute a command on each given folder"""
+
+    if len(elements) == 0:
+        log('No target elements given: bye.')
+
+    command = command.lstrip("'").rstrip("'")
+
+    for item in elements:
+        command_list = command.replace('{{folder}}', item).split(' ')
+        if change_dir is not None:
+            cwd = change_dir
+        else:
+            cwd = os.path.join(os.path.curdir, item)
+        cwd = os.path.realpath(cwd)
+
+        log('Would now run', command_list, 'on', item, 'in', cwd)
+        if confirm and not input('Confirm? (y/N) ').upper() == 'Y':
+            log('STOPPED FOREACH')
+            sys.exit()
+
+        if not dry:
+            success, result = run_process(cwd, command_list)
+            if not success:
+                log(result)
+            if stop:
+                log('STOPPED FOREACH')
+                sys.exit()
+
+
+def main():
+    """Run the foreach program."""
+
+    foreach()
+
+
+if __name__ == '__main__':
+    main()
