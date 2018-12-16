@@ -79,9 +79,10 @@ def run_process(cwd, args, shell=None):
 @click.option('--confirm', '-c', is_flag=True, default=False, help='Confirm call for each element')
 @click.option('--dry', '-d', is_flag=True, default=False, help='Do a dry run')
 @click.option('--change-dir', default=None, help='Change to another directory before execution')
+@click.option('--output', '-o', is_flag=True, default=False, help='Log command output')
 @click.argument('command')
 @click.argument('elements', nargs=-1)
-def foreach(stop, confirm, dry, change_dir, command, elements):
+def foreach(stop, confirm, dry, change_dir, output, command, elements):
     """Execute a command on each given folder"""
 
     if len(elements) == 0:
@@ -106,6 +107,8 @@ def foreach(stop, confirm, dry, change_dir, command, elements):
             success, result = run_process(cwd, command_list)
             if not success:
                 log(result)
+            elif output:
+                log(result.output)
             if stop:
                 log('STOPPED FOREACH')
                 sys.exit()
