@@ -38,9 +38,14 @@ import spur
 import click
 import sys
 
+QUIET = False
 
-def log(*what):
+
+def log(*what, ignore_quiet=False):
     """Very simple logging"""
+
+    if QUIET and not ignore_quiet:
+        return
 
     result = ""
     for item in what:
@@ -80,10 +85,16 @@ def run_process(cwd, args, shell=None):
 @click.option('--dry', '-d', is_flag=True, default=False, help='Do a dry run')
 @click.option('--change-dir', default=None, help='Change to another directory before execution')
 @click.option('--output', '-o', is_flag=True, default=False, help='Log command output')
+@click.option('--pure', '-p', is_flag=True, default=False, help='Log command output with original formatting')
+@click.option('--header', '-h', is_flag=True, default=False, help='Log a header for each command')
+@click.option('--quiet', '-q', is_flag=True, default=False, help='Suppress forage debug output')
 @click.argument('command')
 @click.argument('elements', nargs=-1)
-def foreach(stop, confirm, dry, change_dir, output, command, elements):
+def foreach(stop, confirm, dry, change_dir, output, pure, header, quiet, command, elements):
     """Execute a command on each given folder"""
+
+    global QUIET
+    QUIET = quiet
 
     if len(elements) == 0:
         log('No target elements given: bye.')
@@ -91,6 +102,8 @@ def foreach(stop, confirm, dry, change_dir, output, command, elements):
     command = command.lstrip("'").rstrip("'")
 
     for item in elements:
+        if header:
+            log('===== %s =====' % item, ignore_quiet=True)
         command_list = command.replace('{{folder}}', item).split(' ')
         if change_dir is not None:
             cwd = change_dir
@@ -108,7 +121,11 @@ def foreach(stop, confirm, dry, change_dir, output, command, elements):
             if not success:
                 log(result)
             elif output:
-                log(result.output)
+                if pure:
+                    stuff = result.output.decode('ascii')
+                else:
+                    stuff = result.output
+                log(stuff, ignore_quiet=True)
             if stop:
                 log('STOPPED FOREACH')
                 sys.exit()
