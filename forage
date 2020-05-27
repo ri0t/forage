@@ -88,9 +88,13 @@ def run_process(cwd, args, shell=None):
 @click.option('--pure', '-p', is_flag=True, default=False, help='Log command output with original formatting')
 @click.option('--header', '-h', is_flag=True, default=False, help='Log a header for each command')
 @click.option('--quiet', '-q', is_flag=True, default=False, help='Suppress forage debug output')
+@click.option('--recurse', '-r', is_flag=True, default=False, help='Recurse given subdirectory')
+@click.option('--recurse-level', '-rl', type=int, default=1, help='Recursion depth')
+@click.option('--cmd-replace', type=str, default="")
 @click.argument('command')
 @click.argument('elements', nargs=-1)
-def foreach(stop, confirm, dry, change_dir, output, pure, header, quiet, command, elements):
+def forage(stop, confirm, dry, change_dir, output, pure, header, quiet,
+            recurse, recurse_level, cmd_replace, command, elements):
     """Execute a command on each given folder"""
 
     global QUIET
@@ -98,6 +102,20 @@ def foreach(stop, confirm, dry, change_dir, output, pure, header, quiet, command
 
     if len(elements) == 0:
         log('No target elements given: bye.')
+        return
+
+    if recurse:
+        if len(elements) > 1:
+            log('Will only operate on the first element. You gave multiple!')
+
+        target = elements[0]
+        elements = []
+
+        for root, dirs, files in os.walk(target):
+            if root[len(target) + 1:].count(os.sep) < recurse_level:
+                elements.append(os.path.join(root))
+
+        log(elements)
 
     command = command.lstrip("'").rstrip("'")
 
@@ -105,19 +123,22 @@ def foreach(stop, confirm, dry, change_dir, output, pure, header, quiet, command
         if header:
             log('===== %s =====' % item, ignore_quiet=True)
         command_list = command.replace('{{folder}}', item).split(' ')
+        replaced_command_list = []
+        for command_item in command_list:
+            replaced_command_list.append(command_item.replace('{{replace}}', cmd_replace))
         if change_dir is not None:
             cwd = change_dir
         else:
             cwd = os.path.join(os.path.curdir, item)
         cwd = os.path.realpath(cwd)
 
-        log('Would now run', command_list, 'on', item, 'in', cwd)
+        log('Would now run', replaced_command_list, 'on', item, 'in', cwd)
         if confirm and not input('Confirm? (y/N) ').upper() == 'Y':
             log('STOPPED FOREACH')
             sys.exit()
 
         if not dry:
-            success, result = run_process(cwd, command_list)
+            success, result = run_process(cwd, replaced_command_list)
             if not success:
                 log(result)
             elif output:
@@ -134,7 +155,7 @@ def foreach(stop, confirm, dry, change_dir, output, pure, header, quiet, command
 def main():
     """Run the foreach program."""
 
-    foreach()
+    forage()
 
 
 if __name__ == '__main__':
